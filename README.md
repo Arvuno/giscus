@@ -40,6 +40,22 @@ If you're using giscus, consider [starring 🌟 giscus on GitHub][repo] and addi
 
 You can add additional configurations (e.g. allowing specific origins) by following the [advanced usage guide][advanced-usage].
 
+## Configuration
+
+Create a `giscus.json` file in your repository root to configure giscus:
+
+```json
+{
+  "origins": ["https://your-domain.com"],
+  "defaultCommentOrder": "newest"
+}
+```
+
+Available options:
+- `origins` — List of allowed origins for embedding
+- `originsRegex` — Regex patterns for allowed origins
+- `defaultCommentOrder` — Set to `"oldest"` (default) or `"newest"` to control comment sort order
+
 To use giscus with React, Vue, or Svelte, check out the [giscus component library][giscus-component].
 
 ## Migrating
