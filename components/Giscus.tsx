@@ -31,7 +31,7 @@ export default function Giscus({ onDiscussionCreateRequest, onError }: IGiscusPr
   const query = { repo, term, category, number, strict };
 
   const { addNewComment, updateReactions, increaseSize, backMutators, frontMutators, ...data } =
-    useFrontBackDiscussion(query, token, orderBy);
+    useFrontBackDiscussion(query, token || undefined, orderBy);
 
   useEffect(() => {
     if (data.error && onError) {
