@@ -103,3 +103,6 @@ localization! Follow these steps to add a new localization:
 [plural-rules]: https://www.unicode.org/cldr/charts/46/supplemental/language_plural_rules.html
 [i18n-tsx]: lib/i18n.tsx
 [i18n-js]: i18n.js
+
+<!-- Thanks for contributing! -->
+
