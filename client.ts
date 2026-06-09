@@ -7,6 +7,16 @@
     return `[giscus] An error occurred. Error message: "${message}".`;
   }
 
+  // Some embedded WebViews disable localStorage entirely; reading from it
+  // throws. Treat any failure to read as "no saved session" instead of crashing.
+  function safeSessionRead() {
+    try {
+      return localStorage.getItem(GISCUS_SESSION_KEY);
+    } catch {
+      return null;
+    }
+  }
+
   function getMetaContent(property: string, og = false) {
     const ogSelector = og ? `meta[property='og:${property}'],` : '';
     const element = document.querySelector<HTMLMetaElement>(
@@ -19,7 +29,7 @@
   // Set up session and clear the session param on load
   const url = new URL(location.href);
   let session = url.searchParams.get('giscus') || '';
-  const savedSession = localStorage.getItem(GISCUS_SESSION_KEY);
+  const savedSession = safeSessionRead();
   url.searchParams.delete('giscus');
   url.hash = '';
   const cleanedLocation = url.toString();
@@ -165,7 +175,7 @@
       message.includes('State has expired')
     ) {
       // Might be because token is expired or other causes
-      if (localStorage.getItem(GISCUS_SESSION_KEY) !== null) {
+      if (safeSessionRead() !== null) {
         localStorage.removeItem(GISCUS_SESSION_KEY);
         console.warn(`${formatError(message)} Session has been cleared.`);
         signOut();
