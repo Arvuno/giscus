@@ -56,7 +56,13 @@ export function cleanSessionParam(url: string) {
 }
 
 export function isEmpty(v: unknown) {
-  return v === null || v === undefined || v === '' || Number.isNaN(v);
+  if (v === null || v === undefined || v === '' || Number.isNaN(v)) return true;
+  // Treat empty arrays and plain objects as empty. `URLSearchParams` serializes
+  // an empty array to "" and a plain object to "[object Object]", both of
+  // which are noise in the resulting query string.
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.keys(v as Record<string, unknown>).length === 0;
+  return false;
 }
 
 export async function clipboardCopy(text: string) {
