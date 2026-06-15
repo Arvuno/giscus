@@ -39,6 +39,9 @@ yarn-error.log*
 # Compiled client script
 public/client.js
 
+# Compiled test artefacts (see tsconfig.test.json)
+/.test-build/
+
 # Compiled themes
 public/themes/
 

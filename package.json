@@ -18,7 +18,8 @@
     "lint": "stylelint styles/**/*.css && eslint . --cache --max-warnings 0",
     "lint:fix": "stylelint --fix styles/**/*.css && eslint --fix . --cache --max-warnings 0",
     "format": "prettier --check .",
-    "format:fix": "prettier --write ."
+    "format:fix": "prettier --write .",
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/lib/utils.theme.test.js"
   },
   "dependencies": {
     "@next/bundle-analyzer": "^12.3.4",

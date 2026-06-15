@@ -10,8 +10,34 @@ if (typeof window === 'undefined') {
   webcrypto = window.crypto;
 }
 
-function isAvailableTheme(theme: Theme): theme is AvailableTheme {
+export function isAvailableTheme(theme: Theme): theme is AvailableTheme {
   return availableThemes.includes(theme as AvailableTheme);
+}
+
+// A "custom" theme is any value that is not one of the built-in themes
+// listed in `availableThemes`. The supported custom shapes are documented in
+// `lib/variables.ts` (`Theme = AvailableTheme | `/${string}` | `https://${string}``),
+// so this helper accepts any non-built-in value as a candidate custom theme
+// and lets the caller decide whether to surface it to the user.
+export function isCustomTheme(theme: Theme): boolean {
+  if (typeof theme !== 'string' || !theme) return false;
+  return !isAvailableTheme(theme);
+}
+
+// Sanitize a theme value read from an untrusted source (URL query parameter,
+// localStorage, postMessage payload). Returns the built-in theme if the value
+// matches one, or the original value if it looks like a custom theme URL/path,
+// or `null` if the value is empty or shaped incorrectly.
+export function normalizeThemeInput(theme: unknown): Theme | null {
+  if (typeof theme !== 'string') return null;
+  const trimmed = theme.trim();
+  if (!trimmed) return null;
+  if (isAvailableTheme(trimmed as Theme)) return trimmed as Theme;
+  // Built-in themes cover the case where the value is a known key. Anything
+  // else is treated as a candidate custom theme path / URL. The cast widens
+  // `string` to the `Theme` union; the function does not validate the URL
+  // shape because that is the caller's responsibility.
+  return trimmed as Theme;
 }
 
 export function resolveTheme(theme: Theme): Theme {
