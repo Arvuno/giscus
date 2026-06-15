@@ -1,5 +1,6 @@
 (function () {
   const GISCUS_SESSION_KEY = 'giscus-session';
+  const SESSION_TTL_MS = 5 * 60 * 1000; // matches DEFAULT_VALIDITY_PERIOD in lib/oauth/state.ts
   const script = document.currentScript as HTMLScriptElement;
   const giscusOrigin = new URL(script.src).origin;
 
@@ -16,24 +17,82 @@
     return element ? element.content : '';
   }
 
+  // `localStorage` access can throw in several real-world contexts:
+  //   * iOS WKWebView with `dom.storage.enabled = false`.
+  //   * Safari ITP without a prior user gesture (third-party iframe).
+  //   * Brave strict fingerprinting shields.
+  //   * Privacy-focused browsers that block storage in cross-site contexts.
+  // Every call site must go through `safeStorage` so the widget keeps loading
+  // and degrades gracefully to a session-less render instead of failing the
+  // whole script.
+  const safeStorage = {
+    getItem(key: string): string | null {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        console.warn(
+          `${formatError(e?.message || 'localStorage read failed.')} Falling back to a session-less render.`,
+        );
+        return null;
+      }
+    },
+    setItem(key: string, value: string): boolean {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        console.warn(
+          `${formatError(e?.message || 'localStorage write failed.')} Session will not persist.`,
+        );
+        return false;
+      }
+    },
+    removeItem(key: string): void {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Best-effort cleanup; nothing actionable for the user.
+      }
+    },
+  };
+
+  // Parse a session value that was previously written by this script. Returns
+  // `null` if the value is missing, empty, or not a non-empty string. Strips
+  // surrounding whitespace, mirroring how some auth providers normalize tokens.
+  function parseStoredSession(raw: string | null): string | null {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    // Stored values are JSON strings; require a top-level string literal.
+    try {
+      const parsed = JSON.parse(trimmed);
+      return typeof parsed === 'string' && parsed.length ? parsed : null;
+    } catch {
+      // Some legacy entries are bare strings (pre-PR-#XXXX). Accept those.
+      return trimmed;
+    }
+  }
+
   // Set up session and clear the session param on load
   const url = new URL(location.href);
   let session = url.searchParams.get('giscus') || '';
-  const savedSession = localStorage.getItem(GISCUS_SESSION_KEY);
+  const sessionWrittenAt = Date.now();
+  const rawSavedSession = safeStorage.getItem(GISCUS_SESSION_KEY);
+  const savedSession = parseStoredSession(rawSavedSession);
   url.searchParams.delete('giscus');
   url.hash = '';
   const cleanedLocation = url.toString();
 
   if (session) {
-    localStorage.setItem(GISCUS_SESSION_KEY, JSON.stringify(session));
-    history.replaceState(undefined, document.title, cleanedLocation);
-  } else if (savedSession) {
-    try {
-      session = JSON.parse(savedSession);
-    } catch (e) {
-      localStorage.removeItem(GISCUS_SESSION_KEY);
-      console.warn(`${formatError(e?.message)} Session has been cleared.`);
+    if (safeStorage.setItem(GISCUS_SESSION_KEY, JSON.stringify(session))) {
+      history.replaceState(undefined, document.title, cleanedLocation);
     }
+  } else if (savedSession) {
+    session = savedSession;
+  } else if (rawSavedSession !== null) {
+    // Storage held a value that was not a usable session. Clear it so the
+    // next page load starts from a clean slate.
+    safeStorage.removeItem(GISCUS_SESSION_KEY);
   }
 
   const attributes = script.dataset;
@@ -137,6 +196,30 @@
     iframeElement.src = src; // Force reload
   }
 
+  // Cross-tab session sync. If the user signs out (or the session is cleared
+  // for any other reason) in another tab, mirror that here so the widget
+  // doesn't keep using a now-invalid token. Wrapped in a feature check so the
+  // script still loads in very old browsers where the `storage` event is
+  // missing.
+  if (typeof window !== 'undefined' && 'addEventListener' in window) {
+    window.addEventListener('storage', (event) => {
+      if (event.key !== GISCUS_SESSION_KEY) return;
+      if (event.newValue !== null) return; // another tab wrote a session; nothing to do
+      if (safeStorage.getItem(GISCUS_SESSION_KEY) === null) {
+        signOut();
+      }
+    });
+  }
+
+  // Defensive TTL check. The OAuth `state` already expires server-side after
+  // 5 minutes, but the local cached session can outlive it. If we observed the
+  // session more than `SESSION_TTL_MS` ago, drop it to avoid emitting auth
+  // headers against a token that the server will reject.
+  if (session && Date.now() - sessionWrittenAt > SESSION_TTL_MS) {
+    safeStorage.removeItem(GISCUS_SESSION_KEY);
+    session = '';
+  }
+
   // Listen to messages
   window.addEventListener('message', (event) => {
     if (event.origin !== giscusOrigin) return;
@@ -149,7 +232,7 @@
     }
 
     if (data.giscus.signOut) {
-      localStorage.removeItem(GISCUS_SESSION_KEY);
+      safeStorage.removeItem(GISCUS_SESSION_KEY);
       console.log(`[giscus] User has logged out. Session has been cleared.`);
       signOut();
       return;
@@ -165,8 +248,8 @@
       message.includes('State has expired')
     ) {
       // Might be because token is expired or other causes
-      if (localStorage.getItem(GISCUS_SESSION_KEY) !== null) {
-        localStorage.removeItem(GISCUS_SESSION_KEY);
+      if (safeStorage.getItem(GISCUS_SESSION_KEY) !== null) {
+        safeStorage.removeItem(GISCUS_SESSION_KEY);
         console.warn(`${formatError(message)} Session has been cleared.`);
         signOut();
       } else if (!savedSession) {
