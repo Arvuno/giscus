@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "lib": ["dom", "esnext"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false,
+    "noImplicitAny": false,
+    "resolveJsonModule": true
+  },
+  "include": ["lib/oauth/encryption.ts", "lib/oauth/encryption.test.ts"]
+}

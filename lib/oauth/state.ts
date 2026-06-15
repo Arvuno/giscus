@@ -1,4 +1,4 @@
-import { aesGcmEncrypt, aesGcmDecrypt } from './encryption';
+import { aesGcmEncrypt, aesGcmDecrypt, DecryptionError } from './encryption';
 
 const DEFAULT_VALIDITY_PERIOD = 5 * 60 * 1000; // 5 minutes
 
@@ -21,11 +21,15 @@ export async function decodeState(encryptedState: string, password: string) {
   try {
     const decrypted = await aesGcmDecrypt(encryptedState, password);
     state = JSON.parse(decrypted);
-  } catch {
-    throw new Error('Invalid state value.');
+  } catch (e) {
+    // `aesGcmDecrypt` throws `DecryptionError` for malformed input. `JSON.parse`
+    // throws `SyntaxError` for an unparsable envelope. Both are surfaced as
+    // "Invalid state value" so the OAuth flow has a single, well-defined
+    // failure mode to handle.
+    throw new DecryptionError('Invalid state value.', { cause: e });
   }
   if (Date.now() > state.expires) {
-    throw new Error('State has expired.');
+    throw new DecryptionError('State has expired.');
   }
   return state.value;
 }
